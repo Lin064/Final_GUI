@@ -84,6 +84,12 @@ class SecondUi(QMainWindow):  # 建立第二个窗口的类
             msg = QtWidgets.QMessageBox.warning(self, 'warning', "Check your computer camera", buttons=QtWidgets.QMessageBox.Ok)
         else:
             self.timer_camera.start(50)  #
+
+        self.model = tf.keras.models.load_model('./model/weights.07-0.39.hdf5')
+        self.eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_eye.xml')
+        self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        mixer.init()
+        self.sound = mixer.Sound(r'./alarm.wav')
         self.init_ui()
 
     def init_ui(self):
@@ -137,69 +143,69 @@ class SecondUi(QMainWindow):  # 建立第二个窗口的类
         self.firstMainWindow = FirstMainWin()
         self.firstMainWindow.show()
     def identify(self,frame):
-        mixer.init()
-        sound = mixer.Sound(r'./alarm.wav')
-        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-        eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_eye.xml')
-        model = tf.keras.models.load_model('./model/weights.07-0.39.hdf5')
+        #sound = mixer.Sound(r'./alarm.wav')
+        #face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        #eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_eye.xml')
+        #model = tf.keras.models.load_model('./model/weights.07-0.39.hdf5')
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        #faces = face_cascade.detectMultiScale(gray, scaleFactor=1.2, minNeighbors=3)
-        eyes = eye_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=4)
+        faces = self.face_cascade.detectMultiScale(gray, scaleFactor=1.2, minNeighbors=3)
+        #eyes = self.eye_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=3)
         #cv2.rectangle(frame, (0, height - 50), (200, height), (0, 0, 0), thickness=cv2.FILLED)
-        #for (x, y, w, h) in faces:
+        for (x, y, w, h) in faces:
             #cv2.rectangle(frame, pt1=(x, y), pt2=(x + w, y + h), color=(0, 255, 0), thickness=3)
-        close = 0;
-        for (ex, ey, ew, eh) in eyes:
             close = 0;
-            eye= frame[ey:ey+eh,ex:ex+ew]
-            eye= cv2.resize(eye,(80,80))
-            eye= eye/255
-            eye= eye.reshape(80,80,3)
-            eye= np.expand_dims(eye,axis=0)
-           # preprocessing is done now model prediction
-            prediction = model.predict(eye)
-            #print(prediction)
-            if prediction[0][0] > 0.10:
-                cv2.rectangle(frame, pt1=(ex, ey), pt2=(ex + ew, ey + eh), color=(255, 0, 0), thickness=3)
-                close += 1;
-                self.score = self.score + 1
+            eyes = self.eye_cascade.detectMultiScale(gray[y:y+h,x:x+w], scaleFactor=1.2, minNeighbors=5)
+            for (ex, ey, ew, eh) in eyes:
+                close = 0;
+                eye= frame[ey+y:ey+eh+y,ex+x:ex+ew+x]
+                eye= cv2.resize(eye,(80,80))
+                eye= eye/255
+                eye= eye.reshape(80,80,3)
+                eye= np.expand_dims(eye,axis=0)
+               # preprocessing is done now model prediction
+                prediction = self.model.predict(eye)
+                #print(prediction)
+                if prediction[0][0] > 0.10:
+                    cv2.rectangle(frame, pt1=(ex+x, ey+y), pt2=(ex + ew+x, ey + eh+y), color=(255, 0, 0), thickness=3)
+                    close += 1;
+                    self.score = self.score + 1
 
-                # if eyes are open
-            elif prediction[0][1] > 0.90:
-                cv2.rectangle(frame, pt1=(ex, ey), pt2=(ex + ew, ey + eh), color=(0, 255, 0), thickness=3)
-                self.score = self.score - 1
-                if (self.score < 0):
-                    self.score = 0
-        if close > 0:
-            cv2.putText(frame, 'closed', (50, 50), fontFace=cv2.FONT_HERSHEY_COMPLEX_SMALL, fontScale=1,
-                        color=(255, 0, 0),
-                        thickness=1, lineType=cv2.LINE_AA)
-
-        else:
-            cv2.putText(frame, 'open ', (50, 50), fontFace=cv2.FONT_HERSHEY_COMPLEX_SMALL, fontScale=1,
-                        color=(0, 255, 0),
-                        thickness=1, lineType=cv2.LINE_AA)
-
-        if (self.score > 8):
-            try:
-                cv2.putText(frame, 'Score' + str(self.score), (50, 100), fontFace=cv2.FONT_HERSHEY_COMPLEX_SMALL,
-                            fontScale=1, color=(255, 0, 0),
+                    # if eyes are open
+                elif prediction[0][1] > 0.90:
+                    cv2.rectangle(frame, pt1=(ex+x, ey+y), pt2=(ex + ew+x, ey + eh+y), color=(0, 255, 0), thickness=3)
+                    self.score = self.score - 1
+                    if (self.score < 0):
+                        self.score = 0
+            if close > 0:
+                cv2.putText(frame, 'closed', (50, 50), fontFace=cv2.FONT_HERSHEY_COMPLEX_SMALL, fontScale=1,
+                            color=(255, 0, 0),
                             thickness=1, lineType=cv2.LINE_AA)
-                # print("alarm")
-                self.status.show();
-                if(self.alarmOn == False):
-                    sound.play()
-                    self.alarmOn = True;
-            except:
+
+            else:
+                cv2.putText(frame, 'open ', (50, 50), fontFace=cv2.FONT_HERSHEY_COMPLEX_SMALL, fontScale=1,
+                            color=(0, 255, 0),
+                            thickness=1, lineType=cv2.LINE_AA)
+
+            if (self.score > 15):
+                try:
+                    cv2.putText(frame, 'Score' + str(self.score), (50, 100), fontFace=cv2.FONT_HERSHEY_COMPLEX_SMALL,
+                                fontScale=1, color=(255, 0, 0),
+                                thickness=1, lineType=cv2.LINE_AA)
+                    # print("alarm")
+                    self.status.show();
+                    if(self.alarmOn == False):
+                        self.sound.play()
+                        self.alarmOn = True;
+                except:
+                    pass
+            else:
+                cv2.putText(frame, 'Score' + str(self.score), (50, 100), fontFace=cv2.FONT_HERSHEY_COMPLEX_SMALL,
+                            fontScale=1, color=(0, 255, 0),
+                            thickness=1, lineType=cv2.LINE_AA)
+                self.status.hide();
+                self.sound.stop()
+                self.alarmOn = False;
                 pass
-        else:
-            cv2.putText(frame, 'Score' + str(self.score), (50, 100), fontFace=cv2.FONT_HERSHEY_COMPLEX_SMALL,
-                        fontScale=1, color=(0, 255, 0),
-                        thickness=1, lineType=cv2.LINE_AA)
-            self.status.hide();
-            sound.stop()
-            self.alarmOn = False;
-            pass
 
 class ThirdUi(QMainWindow):  #
     def __init__(self,parent='None'):
